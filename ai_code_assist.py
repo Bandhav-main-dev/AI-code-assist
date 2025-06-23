@@ -1,12 +1,14 @@
+# ai_code_assist.py
+
 import os
-from dotenv import load_dotenv
 import google.generativeai as genai
 
-# ✅ Load .env
-load_dotenv()
+GEMINI_API_KEY = "AIzaSyCqiRDczzhwTCoEpi2y1eJlDxuprRZ1qJE"
 
-# ✅ Get Gemini API key from .env
-GEMINI_API_KEY = os.getenv("GEMINI_API_KEY")
+# ========== 🔧 GEMINI SETUP ==========
+genai.configure(api_key=GEMINI_API_KEY)
+model = genai.GenerativeModel("gemini-pro")
+
 # ========== 🤖 GEMINI PROMPTS ==========
 def gemini_prompt(prompt):
     try:
@@ -30,6 +32,8 @@ def get_project_and_algo_paths():
             break
         print("❌ Invalid algorithm file. Try again.\n")
 
+    print(f"✅ Project Folder: {folder}")
+    print(f"✅ Algorithm File: {algo}\n")
     return folder, algo
 
 # ========== 🗂 FILE UTILITIES ==========
@@ -55,13 +59,15 @@ def correct_errors_with_gemini(code):
     prompt = f"Fix the following Python code. Return corrected and formatted Python code only:\n\n{code}"
     return gemini_prompt(prompt)
 
-def correct_with_manual_error(code, user_error):
+def correct_with_manual_error(code, user_error, user_prompt=None):
     prompt = (
         "You are a Python code assistant.\n"
         f"The user reported the following error:\n\n{user_error}\n\n"
-        "Fix the following Python code based on the error:\n\n"
-        f"{code}\n\nReturn the corrected code only."
+        "Fix the following Python code:\n\n"
+        f"{code}"
     )
+    if user_prompt:
+        prompt += f"\n\nUse the following additional instruction to guide your fix:\n{user_prompt}"
     return gemini_prompt(prompt)
 
 def generate_code_from_algorithm(algo_file_path):
@@ -74,7 +80,11 @@ def generate_code_from_algorithm(algo_file_path):
 def main():
     print("🔧 Gemini Code Assistant")
     project_folder, algo_file = get_project_and_algo_paths()
+
     manual_error = input("\n📝 Optional: Paste any error message you'd like Gemini to fix (or leave blank):\n> ").strip()
+    clarify_prompt = ""
+    
+    clarify_prompt = input("💬 Optional: Add any clarifying instruction to guide Gemini (or leave blank):\n> ").strip()
 
     print("\n🔍 Reading Python files...")
     python_files = read_python_files(project_folder)
@@ -82,7 +92,7 @@ def main():
     for path, code in python_files.items():
         print(f"\n📄 Fixing: {path}")
         if manual_error:
-            fixed_code = correct_with_manual_error(code, manual_error)
+            fixed_code = correct_with_manual_error(code, manual_error, clarify_prompt)
         else:
             fixed_code = correct_errors_with_gemini(code)
 
@@ -90,12 +100,11 @@ def main():
             write_file(path, fixed_code)
             print(f"✅ Overwritten: {path}")
         else:
-            print(f"⚠️ No output. File not changed: {path}")
+            print(f"⚠️ No response from Gemini. File not updated: {path}")
 
-    # Ask if user wants to generate from algorithm
+    # Optional: Generate code from algorithm file
     confirm_gen = input("\n🧠 Do you want to generate Python code from the algorithm file? (y/n): ").strip().lower()
     if confirm_gen == 'y':
-        print("Generating code...")
         new_code = generate_code_from_algorithm(algo_file)
         filename = input("📄 Enter filename to save (e.g., main.py): ").strip()
         save_path = os.path.join(project_folder, filename)
@@ -104,7 +113,7 @@ def main():
     else:
         print("🛑 Skipped code generation.")
 
-    print("\n📂 Project files:")
+    print("\n📂 Files in project folder:")
     for file in list_all_files(project_folder):
         print(" -", file)
 
