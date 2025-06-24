@@ -1,13 +1,23 @@
-# ai_code_assist.py
-
 import os
 import google.generativeai as genai
+from dotenv import load_dotenv
 
-GEMINI_API_KEY = "AIzaSyCqiRDczzhwTCoEpi2y1eJlDxuprRZ1qJE"
+# ========== 🔐 LOAD ENV ==========
+load_dotenv()
+GEMINI_API_KEY = "AIzaSyAaUej3CVIVz68H_v-GowFcpdvzIogOiVw" 
 
 # ========== 🔧 GEMINI SETUP ==========
 genai.configure(api_key=GEMINI_API_KEY)
-model = genai.GenerativeModel("gemini-pro")
+
+model = genai.GenerativeModel(
+    model_name="gemini-2.0-flash",
+    generation_config=genai.types.GenerationConfig(
+        temperature=0.7,
+        top_p=1,
+        top_k=1,
+        max_output_tokens=2048,
+    )
+)
 
 # ========== 🤖 GEMINI PROMPTS ==========
 def gemini_prompt(prompt):
@@ -76,6 +86,45 @@ def generate_code_from_algorithm(algo_file_path):
     prompt = f"Convert this algorithm into a working Python program:\n\n{algo}"
     return gemini_prompt(prompt)
 
+# ========== 🧪 TESTING & RUNNING ==========
+def test_project(folder):
+    print("\n🧪 Running all .py files for testing...")
+    for root, _, files in os.walk(folder):
+        for file in files:
+            if file.endswith(".py"):
+                path = os.path.join(root, file)
+                print(f"\n▶️ Testing: {path}")
+                result = os.system(f"python \"{path}\"")
+                if result != 0:
+                    print(f"❌ Error occurred in: {file}")
+                else:
+                    print(f"✅ Passed: {file}")
+
+def run_project(folder):
+    print("\n▶️ Running main project file...")
+    main_file = os.path.join(folder, "main.py")
+    if os.path.exists(main_file):
+        os.system(f"python \"{main_file}\"")
+    else:
+        print("❌ No 'main.py' found in project folder.")
+
+def start_project(folder):
+    print("\n🚀 Starting project and checking for known ports...")
+    possible_files = ["app.py", "main.py", "manage.py"]
+    entry_point = None
+    for f in possible_files:
+        path = os.path.join(folder, f)
+        if os.path.exists(path):
+            entry_point = path
+            break
+
+    if entry_point:
+        print(f"▶️ Starting: {entry_point}")
+        print("🌐 Watching for ports: 8000 (FastAPI/Django), 5000 (Flask), 3000 (React/Node)")
+        os.system(f"python \"{entry_point}\"")
+    else:
+        print("❌ No known entry point file (app.py / main.py / manage.py) found.")
+
 # ========== 🚀 MAIN ==========
 def main():
     print("🔧 Gemini Code Assistant")
@@ -83,7 +132,6 @@ def main():
 
     manual_error = input("\n📝 Optional: Paste any error message you'd like Gemini to fix (or leave blank):\n> ").strip()
     clarify_prompt = ""
-    
     clarify_prompt = input("💬 Optional: Add any clarifying instruction to guide Gemini (or leave blank):\n> ").strip()
 
     print("\n🔍 Reading Python files...")
@@ -93,16 +141,19 @@ def main():
         print(f"\n📄 Fixing: {path}")
         if manual_error:
             fixed_code = correct_with_manual_error(code, manual_error, clarify_prompt)
+            
         else:
             fixed_code = correct_errors_with_gemini(code)
 
         if fixed_code.strip():
+            fixed_code='#' + fixed_code
+            fixed_code = fixed_code.replace("```"," ")
+            
             write_file(path, fixed_code)
             print(f"✅ Overwritten: {path}")
         else:
             print(f"⚠️ No response from Gemini. File not updated: {path}")
 
-    # Optional: Generate code from algorithm file
     confirm_gen = input("\n🧠 Do you want to generate Python code from the algorithm file? (y/n): ").strip().lower()
     if confirm_gen == 'y':
         new_code = generate_code_from_algorithm(algo_file)
@@ -116,6 +167,22 @@ def main():
     print("\n📂 Files in project folder:")
     for file in list_all_files(project_folder):
         print(" -", file)
+
+    # ========== EXTRA ACTIONS ==========
+    print("\n📦 Additional Actions:")
+    print("1. 🧪 Test all Python files")
+    print("2. ▶️ Run main.py")
+    print("3. 🚀 Start project (detect Flask/Django/FastAPI)")
+    choice = input("Select action (1/2/3 or Enter to skip): ").strip()
+
+    if choice == "1":
+        test_project(project_folder)
+    elif choice == "2":
+        run_project(project_folder)
+    elif choice == "3":
+        start_project(project_folder)
+    else:
+        print("✅ No additional action selected.")
 
 # ========== 🔧 RUN ==========
 if __name__ == "__main__":
