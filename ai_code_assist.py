@@ -1,14 +1,11 @@
 import os
 import google.generativeai as genai
-from dotenv import load_dotenv
+from datetime import datetime
 
-# ========== 🔐 LOAD ENV ==========
-load_dotenv()
-GEMINI_API_KEY = "AIzaSyAaUej3CVIVz68H_v-GowFcpdvzIogOiVw" 
+GEMINI_API_KEY = "AIzaSyAaUej3CVIVz68H_v-GowFcpdvzIogOiVw"
 
 # ========== 🔧 GEMINI SETUP ==========
 genai.configure(api_key=GEMINI_API_KEY)
-
 model = genai.GenerativeModel(
     model_name="gemini-2.0-flash",
     generation_config=genai.types.GenerationConfig(
@@ -19,7 +16,7 @@ model = genai.GenerativeModel(
     )
 )
 
-# ========== 🤖 GEMINI PROMPTS ==========
+# ========== 🤖 GEMINI PROMPT ==========
 def gemini_prompt(prompt):
     try:
         response = model.generate_content(prompt)
@@ -64,9 +61,33 @@ def write_file(path, content):
 def list_all_files(folder):
     return [os.path.join(dp, f) for dp, _, files in os.walk(folder) for f in files]
 
+# ========== 📝 LOGGING FUNCTION ==========
+def log_change(path, old_code, new_code, reason):
+    timestamp = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    change_prompt = (
+        f"Explain what was changed in the following Python code:\n\n"
+        f"Old Code:\n{old_code[:1000]}\n\nNew Code:\n{new_code[:1000]}"
+    )
+    explanation = gemini_prompt(change_prompt).strip()
+    log_entry = (
+        f"🕒 {timestamp}\n"
+        f"📄 File: {path}\n"
+        f"🔄 Reason: {reason}\n"
+        f"🧠 Changes:\n{explanation}\n"
+        f"{'-'*40}\n"
+    )
+    file_path = path+"/log.txt"
+    
+    if os.path.exist:
+    	with open(file_path, "a", encoding="utf-8") as log_file:
+     	   log_file.write(log_entry)
+    else:
+    	with open(file_path, "w", encoding="utf-8") as log_file:
+    		log_file.write(log_entry)
+
 # ========== 🧠 AI PROCESSING ==========
 def correct_errors_with_gemini(code):
-    prompt = f"Fix the following Python code. Return corrected and formatted Python code only:\n\n{code}"
+    prompt = f"Fix the following Python code. Return corrected and formatted Python code only:\n\n{code} and if you don't find error then give code as it is"
     return gemini_prompt(prompt)
 
 def correct_with_manual_error(code, user_error, user_prompt=None):
@@ -120,10 +141,9 @@ def start_project(folder):
 
     if entry_point:
         print(f"▶️ Starting: {entry_point}")
-        print("🌐 Watching for ports: 8000 (FastAPI/Django), 5000 (Flask), 3000 (React/Node)")
         os.system(f"python \"{entry_point}\"")
     else:
-        print("❌ No known entry point file (app.py / main.py / manage.py) found.")
+        print("❌ No known entry point found.")
 
 # ========== 🚀 MAIN ==========
 def main():
@@ -131,7 +151,6 @@ def main():
     project_folder, algo_file = get_project_and_algo_paths()
 
     manual_error = input("\n📝 Optional: Paste any error message you'd like Gemini to fix (or leave blank):\n> ").strip()
-    clarify_prompt = ""
     clarify_prompt = input("💬 Optional: Add any clarifying instruction to guide Gemini (or leave blank):\n> ").strip()
 
     print("\n🔍 Reading Python files...")
@@ -141,15 +160,15 @@ def main():
         print(f"\n📄 Fixing: {path}")
         if manual_error:
             fixed_code = correct_with_manual_error(code, manual_error, clarify_prompt)
-            
+            reason = "Manual Error Fix"
         else:
             fixed_code = correct_errors_with_gemini(code)
+            reason = "Auto Error Correction"
 
         if fixed_code.strip():
-            fixed_code='#' + fixed_code
-            fixed_code = fixed_code.replace("```"," ")
-            
+            fixed_code = "#" + fixed_code.replace("```", "")
             write_file(path, fixed_code)
+            log_change(path, code, fixed_code, reason)
             print(f"✅ Overwritten: {path}")
         else:
             print(f"⚠️ No response from Gemini. File not updated: {path}")
@@ -158,8 +177,9 @@ def main():
     if confirm_gen == 'y':
         new_code = generate_code_from_algorithm(algo_file)
         filename = input("📄 Enter filename to save (e.g., main.py): ").strip()
-        save_path = os.path.join(project_folder, filename)
+        save_path = project_folder
         write_file(save_path, new_code)
+        log_change(save_path, "", new_code, "Generated from Algorithm")
         print(f"✅ Generated code saved to: {save_path}")
     else:
         print("🛑 Skipped code generation.")
@@ -168,7 +188,6 @@ def main():
     for file in list_all_files(project_folder):
         print(" -", file)
 
-    # ========== EXTRA ACTIONS ==========
     print("\n📦 Additional Actions:")
     print("1. 🧪 Test all Python files")
     print("2. ▶️ Run main.py")
